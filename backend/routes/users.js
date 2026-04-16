@@ -4,7 +4,6 @@ import authMiddleware from "../middleware/auth.js";
 
 const router = express.Router();
 
-// GET /api/users - all users sorted by last name
 router.get("/", authMiddleware, async (req, res) => {
   try {
     const [users] = await db.query(
