@@ -14,17 +14,9 @@ document.getElementById("nav-hamburger").addEventListener("click", () => {
   document.getElementById("nav-mobile-menu").classList.toggle("hidden");
 });
 
-const imageInput = document.getElementById("post-image");
-const imagePreview = document.getElementById("post-image-preview");
-imageInput.addEventListener("change", () => {
-  const file = imageInput.files[0];
-  if (file) {
-    imagePreview.innerHTML = `<img src="${URL.createObjectURL(file)}" alt="preview" />`;
-    imagePreview.classList.remove("hidden");
-  } else {
-    imagePreview.classList.add("hidden");
-  }
-});
+const params = new URLSearchParams(window.location.search);
+const userId = params.get("id");
+if (!userId) window.location.href = "/pages/users.html";
 
 function formatDate(str) {
   const d = new Date(str);
@@ -36,13 +28,53 @@ function avatarSrc(url, name) {
 }
 
 async function apiFetch(path, options = {}) {
-  const headers = { "Authorization": "Bearer " + token };
-  if (!(options.body instanceof FormData)) {
-    headers["Content-Type"] = "application/json";
-  }
+  const headers = { "Content-Type": "application/json", "Authorization": "Bearer " + token };
   const res = await fetch("http://localhost:3000/api" + path, { ...options, headers });
   const data = await res.json();
   return { ok: res.ok, data };
+}
+
+function renderLikesList(container, likes) {
+  if (likes.length === 0) {
+    container.innerHTML = "<span>No likes yet</span>";
+    return;
+  }
+  container.innerHTML = likes.map(l =>
+    `<div class="like-item"><span>${l.first_name} ${l.last_name}</span><span>${formatDate(l.created_at)}</span></div>`
+  ).join("");
+}
+
+function renderComments(container, comments, postId) {
+  if (comments.length === 0) {
+    container.innerHTML = "<p style='font-size:0.85rem;color:var(--text-muted);'>No comments yet</p>";
+    return;
+  }
+  container.innerHTML = "";
+  comments.forEach(c => {
+    const name = c.first_name + " " + c.last_name;
+    const div = document.createElement("div");
+    div.className = "comment-item";
+    div.innerHTML = `
+      <img class="comment-avatar" src="${avatarSrc(c.profile_photo, name)}" alt="${name}" />
+      <div class="comment-body">
+        <span class="comment-author">${name}</span>
+        <span class="comment-date">${formatDate(c.created_at)}</span>
+        ${currentUser && c.user_id === currentUser.id ? `<button class="comment-delete" data-id="${c.id}">✕</button>` : ""}
+        <p class="comment-text">${c.text}</p>
+      </div>
+    `;
+    container.appendChild(div);
+  });
+
+  container.querySelectorAll(".comment-delete").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const { ok } = await apiFetch("/comments/" + btn.dataset.id, { method: "DELETE" });
+      if (ok) {
+        const { data } = await apiFetch("/posts/" + postId);
+        renderComments(container, data.comments || [], postId);
+      }
+    });
+  });
 }
 
 function renderPost(post) {
@@ -73,7 +105,7 @@ function renderPost(post) {
     deleteBtn.addEventListener("click", async () => {
       if (!confirm("Delete this post?")) return;
       const { ok } = await apiFetch("/posts/" + post.id, { method: "DELETE" });
-      if (ok) loadPosts();
+      if (ok) loadUserData();
     });
   }
 
@@ -89,7 +121,6 @@ function renderPost(post) {
     likesData = data.likes || [];
     userLiked = likesData.some(l => l.user_id === currentUser?.id);
     if (userLiked) likeBtn.classList.add("liked");
-
     renderComments(card.querySelector(".comments-list"), data.comments || [], post.id);
     card.querySelector(".comment-count-label").textContent = `${data.comments?.length || 0} comments`;
   });
@@ -150,100 +181,45 @@ function renderPost(post) {
   return card;
 }
 
-function renderLikesList(container, likes) {
-  if (likes.length === 0) {
-    container.innerHTML = "<span>No likes yet</span>";
-    return;
-  }
-  container.innerHTML = likes.map(l =>
-    `<div class="like-item"><span>${l.first_name} ${l.last_name}</span><span>${formatDate(l.created_at)}</span></div>`
-  ).join("");
-}
-
-function renderComments(container, comments, postId) {
-  if (comments.length === 0) {
-    container.innerHTML = "<p style='font-size:0.85rem;color:var(--text-muted);'>No comments yet</p>";
-    return;
-  }
-  container.innerHTML = "";
-  comments.forEach(c => {
-    const name = c.first_name + " " + c.last_name;
-    const div = document.createElement("div");
-    div.className = "comment-item";
-    div.innerHTML = `
-      <img class="comment-avatar" src="${avatarSrc(c.profile_photo, name)}" alt="${name}" />
-      <div class="comment-body">
-        <span class="comment-author">${name}</span>
-        <span class="comment-date">${formatDate(c.created_at)}</span>
-        ${currentUser && c.user_id === currentUser.id ? `<button class="comment-delete" data-id="${c.id}">✕</button>` : ""}
-        <p class="comment-text">${c.text}</p>
-      </div>
-    `;
-    container.appendChild(div);
-  });
-
-  container.querySelectorAll(".comment-delete").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      const { ok } = await apiFetch("/comments/" + btn.dataset.id, { method: "DELETE" });
-      if (ok) {
-        const { data } = await apiFetch("/posts/" + postId);
-        renderComments(container, data.comments || [], postId);
-      }
-    });
-  });
-}
-
-async function loadPosts() {
-  const container = document.getElementById("posts-container");
-  container.innerHTML = '<div class="loading">Loading posts…</div>';
-
-  const { ok, data } = await apiFetch("/posts");
+async function loadUserData() {
+  const { ok, data } = await apiFetch("/users/" + userId);
 
   if (!ok) {
-    container.innerHTML = '<div class="alert alert-error">Failed to load posts.</div>';
+    document.getElementById("user-profile").innerHTML = '<div class="alert alert-error">User not found.</div>';
     return;
   }
 
-  if (data.length === 0) {
-    container.innerHTML = "<p style='color:var(--text-muted)'>No posts yet.</p>";
-    return;
+  const { user, own_posts, activity } = data;
+  const name = user.first_name + " " + user.last_name;
+  const genderLabel = { male: "Male", female: "Female", other: "Other" }[user.gender] || user.gender;
+
+  document.title = `${name} – ZooNet`;
+
+  document.getElementById("user-profile").innerHTML = `
+    <img class="profile-avatar" src="${avatarSrc(user.profile_photo, name)}" alt="${name}" />
+    <div class="profile-info">
+      <h2>${name}</h2>
+      <p>${genderLabel} · ${user.age} years old</p>
+      <p>${user.email}</p>
+      <p class="profile-joined">Member since ${new Date(user.created_at).toLocaleDateString("en-GB")}</p>
+    </div>
+  `;
+
+  const ownContainer = document.getElementById("own-posts-container");
+  if (own_posts.length === 0) {
+    ownContainer.innerHTML = "<p style='color:var(--text-muted)'>No posts yet.</p>";
+  } else {
+    ownContainer.innerHTML = "";
+    own_posts.forEach(post => ownContainer.appendChild(renderPost(post)));
   }
 
-  container.innerHTML = "";
-  data.forEach(post => container.appendChild(renderPost(post)));
+  const activityContainer = document.getElementById("activity-container");
+  if (activity.length === 0) {
+    activityContainer.innerHTML = "<p style='color:var(--text-muted)'>No activity yet.</p>";
+  } else {
+    activityContainer.innerHTML = "";
+    activity.forEach(post => activityContainer.appendChild(renderPost(post)));
+  }
 }
 
-document.getElementById("new-post-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const errorDiv = document.getElementById("post-error");
-  errorDiv.classList.add("hidden");
-
-  const title = document.getElementById("post-title").value.trim();
-  const text = document.getElementById("post-text").value.trim();
-  const imageFile = document.getElementById("post-image").files[0];
-
-  const formData = new FormData();
-  formData.append("title", title);
-  formData.append("text", text);
-  if (imageFile) formData.append("image", imageFile);
-
-  const res = await fetch("http://localhost:3000/api/posts", {
-    method: "POST",
-    headers: { "Authorization": "Bearer " + token },
-    body: formData,
-  });
-
-  const data = await res.json();
-
-  if (!res.ok) {
-    errorDiv.textContent = data.error;
-    errorDiv.classList.remove("hidden");
-    return;
-  }
-
-  document.getElementById("new-post-form").reset();
-  imagePreview.classList.add("hidden");
-  loadPosts();
-});
-
-loadPosts();
+loadUserData();

@@ -1,11 +1,11 @@
 import express from "express";
 import db from "../db.js";
 import authMiddleware from "../middleware/auth.js";
+import upload from "../middleware/upload.js";
 
 const router = express.Router();
 
-// GET /api/posts - all posts newest first
-router.get("/", async (req, res) => {
+router.get("/", async (_req, res) => {
   try {
     const [posts] = await db.query(`
       SELECT p.*, u.first_name, u.last_name, u.profile_photo,
@@ -15,14 +15,12 @@ router.get("/", async (req, res) => {
       JOIN users u ON p.user_id = u.id
       ORDER BY p.created_at DESC
     `);
-
     res.json(posts);
   } catch (err) {
-    res.status(500).json({ error: "Chyba serveru" });
+    res.status(500).json({ error: "Server error" });
   }
 });
 
-// GET /api/posts/:id - single post with comments and likes
 router.get("/:id", async (req, res) => {
   try {
     const [posts] = await db.query(`
@@ -33,9 +31,7 @@ router.get("/:id", async (req, res) => {
       WHERE p.id = ?
     `, [req.params.id]);
 
-    if (posts.length === 0) {
-      return res.status(404).json({ error: "Prispevek nenalezen" });
-    }
+    if (posts.length === 0) return res.status(404).json({ error: "Post not found" });
 
     const [comments] = await db.query(`
       SELECT c.*, u.first_name, u.last_name, u.profile_photo
@@ -46,7 +42,7 @@ router.get("/:id", async (req, res) => {
     `, [req.params.id]);
 
     const [likes] = await db.query(`
-      SELECT l.created_at, u.first_name, u.last_name
+      SELECT l.user_id, l.created_at, u.first_name, u.last_name
       FROM likes l
       JOIN users u ON l.user_id = u.id
       WHERE l.post_id = ?
@@ -54,47 +50,40 @@ router.get("/:id", async (req, res) => {
 
     res.json({ ...posts[0], comments, likes });
   } catch (err) {
-    res.status(500).json({ error: "Chyba serveru" });
+    res.status(500).json({ error: "Server error" });
   }
 });
 
-// POST /api/posts - create post
-router.post("/", authMiddleware, async (req, res) => {
-  const { title, text, image } = req.body;
+router.post("/", authMiddleware, upload.single("image"), async (req, res) => {
+  const { title, text } = req.body;
 
   if (!title || !text) {
-    return res.status(400).json({ error: "Nazev a text jsou povinne" });
+    return res.status(400).json({ error: "Title and text are required" });
   }
 
   try {
+    const image = req.file ? "/uploads/" + req.file.filename : null;
     const [result] = await db.query(
       "INSERT INTO posts (user_id, title, text, image) VALUES (?, ?, ?, ?)",
-      [req.user.id, title, text, image || null]
+      [req.user.id, title, text, image]
     );
-
-    res.status(201).json({ message: "Prispevek vytvoren", id: result.insertId });
+    res.status(201).json({ message: "Post created", id: result.insertId });
   } catch (err) {
-    res.status(500).json({ error: "Chyba serveru" });
+    res.status(500).json({ error: "Server error" });
   }
 });
 
-// DELETE /api/posts/:id - delete own post
 router.delete("/:id", authMiddleware, async (req, res) => {
   try {
     const [posts] = await db.query("SELECT * FROM posts WHERE id = ?", [req.params.id]);
 
-    if (posts.length === 0) {
-      return res.status(404).json({ error: "Prispevek nenalezen" });
-    }
-
-    if (posts[0].user_id !== req.user.id) {
-      return res.status(403).json({ error: "Nemuzete smazat cizi prispevek" });
-    }
+    if (posts.length === 0) return res.status(404).json({ error: "Post not found" });
+    if (posts[0].user_id !== req.user.id) return res.status(403).json({ error: "Cannot delete someone else's post" });
 
     await db.query("DELETE FROM posts WHERE id = ?", [req.params.id]);
-    res.json({ message: "Prispevek smazan" });
+    res.json({ message: "Post deleted" });
   } catch (err) {
-    res.status(500).json({ error: "Chyba serveru" });
+    res.status(500).json({ error: "Server error" });
   }
 });
 
