@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Register – ZooNet</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body class="auth-page">
+
+  <div class="auth-card">
+    <div class="auth-logo">
+      <span class="logo-icon">◈</span>
+      <h1>ZooNet</h1>
+    </div>
+
+    <h2>Create account</h2>
+
+    <div id="register-error" class="alert alert-error hidden"></div>
+    <div id="register-success" class="alert alert-success hidden"></div>
+
+    <form id="register-form" enctype="multipart/form-data">
+      <div class="form-row">
+        <div class="form-group">
+          <label for="first_name">First name</label>
+          <input type="text" id="first_name" name="first_name" placeholder="John" required />
+        </div>
+        <div class="form-group">
+          <label for="last_name">Last name</label>
+          <input type="text" id="last_name" name="last_name" placeholder="Smith" required />
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label for="age">Age</label>
+          <input type="number" id="age" name="age" min="1" max="120" placeholder="18" required />
+          <span id="age-error" class="field-error hidden">Age must be at least 13.</span>
+        </div>
+        <div class="form-group">
+          <label for="gender">Gender</label>
+          <select id="gender" name="gender" required>
+            <option value="">-- select --</option>
+            <option value="male">Male</option>
+            <option value="female">Female</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="username">Username</label>
+        <input type="text" id="username" name="username" placeholder="jsmith" required />
+      </div>
+
+      <div class="form-group">
+        <label for="email">Email</label>
+        <input type="email" id="email" name="email" placeholder="john@email.com" required />
+      </div>
+
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" placeholder="••••••••" required />
+      </div>
+
+      <div class="form-group">
+        <label for="profile_photo">Profile photo <span class="optional">(optional)</span></label>
+        <input type="file" id="profile_photo" name="profile_photo" accept="image/*" class="file-input" />
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-full">Create account</button>
+    </form>
+
+    <p class="auth-link">Already have an account? <a href="/">Sign in</a></p>
+  </div>
+
+  <script src="/js/register.js"></script>
+</body>
+</html>
